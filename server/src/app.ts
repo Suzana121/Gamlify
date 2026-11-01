@@ -2,8 +2,9 @@ import express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import { createAuthRouter } from './routes/auth';
 import { createMeRouter } from './routes/me';
+import { createHabitsRouter } from './routes/habits';
 
-export type Db = Pick<PrismaClient, 'user'>;
+export type Db = Pick<PrismaClient, 'user' | 'habit'>;
 
 export function createApp(db: Db) {
   const app = express();
@@ -15,6 +16,7 @@ export function createApp(db: Db) {
 
   app.use('/auth', createAuthRouter(db));
   app.use('/me', createMeRouter(db));
+  app.use('/habits', createHabitsRouter(db));
 
   // Express identifies error handlers by their 4-argument signature.
   /* eslint-disable @typescript-eslint/no-unused-vars */
