@@ -26,6 +26,7 @@ model Habit {
   frequency     String
   targetMinutes Int?
   createdAt     DateTime     @default(now())
+  archivedAt    DateTime?
   completions   Completion[]
 
   @@index([userId])
