@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
 import { api, ApiError, type User } from '../api/client';
+import { useHabitsStore } from './habits';
 
 export const TOKEN_KEY = 'gamlify.token';
 
@@ -67,6 +68,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
     logout: async () => {
       await SecureStore.deleteItemAsync(TOKEN_KEY);
+      useHabitsStore.getState().reset();
       set({ token: null, user: null });
     },
   };
