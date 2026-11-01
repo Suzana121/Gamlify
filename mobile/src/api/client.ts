@@ -15,6 +15,22 @@ export class ApiError extends Error {
   }
 }
 
+export type Frequency = 'daily' | 'weekly' | 'custom';
+export type Habit = {
+  id: string;
+  name: string;
+  category: string;
+  frequency: Frequency;
+  targetMinutes: number | null;
+  createdAt: string;
+};
+export type HabitInput = {
+  name: string;
+  category: string;
+  frequency: Frequency;
+  targetMinutes?: number;
+};
+
 type Options = { method?: string; body?: unknown; token?: string | null };
 
 async function request<T>(path: string, { method = 'GET', body, token }: Options = {}) {
@@ -57,4 +73,15 @@ export const api = {
   me: (token: string) => request<{ user: User }>('/me', { token }),
   updateMe: (token: string, displayName: string) =>
     request<{ user: User }>('/me', { method: 'PATCH', body: { displayName }, token }),
+  listHabits: (token: string) => request<{ habits: Habit[] }>('/habits', { token }),
+  createHabit: (token: string, input: HabitInput) =>
+    request<{ habit: Habit }>('/habits', { method: 'POST', body: input, token }),
+  updateHabit: (token: string, id: string, patch: Partial<HabitInput>) =>
+    request<{ habit: Habit }>(`/habits/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: patch,
+      token,
+    }),
+  deleteHabit: (token: string, id: string) =>
+    request<null>(`/habits/${encodeURIComponent(id)}`, { method: 'DELETE', token }),
 };
