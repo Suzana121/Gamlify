@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  passwordHash   String
+  createdAt      DateTime        @default(now())
+  habits         Habit[]
+  characterState CharacterState?
+}
+
+model Habit {
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  category      String
+  frequency     String
+  targetMinutes Int?
+  createdAt     DateTime     @default(now())
+  completions   Completion[]
+
+  @@index([userId])
+}
+
+model Completion {
+  id          String   @id @default(uuid())
+  habitId     String
+  habit       Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  completedAt DateTime @default(now())
+  points      Int
+
+  @@index([habitId])
+}
+
+model CharacterState {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  xp     Int    @default(0)
+  level  Int    @default(1)
+}
