@@ -1,7 +1,8 @@
-import { app } from './app';
+import { PrismaClient } from '@prisma/client';
+import { createApp } from './app';
 
 const port = Number(process.env.PORT) || 3000;
 
-app.listen(port, () => {
+createApp(new PrismaClient()).listen(port, () => {
   console.log(`Gamlify server listening on port ${port}`);
 });
