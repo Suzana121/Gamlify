@@ -4,6 +4,15 @@ export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:300
 );
 
 export type User = { id: string; email: string; displayName: string };
+export type Frequency = 'daily' | 'weekly';
+export type Habit = {
+  id: string;
+  name: string;
+  category: string;
+  frequency: Frequency;
+  targetMinutes: number | null;
+};
+export type HabitInput = Omit<Habit, 'id'>;
 export type AuthResponse = { token: string; user: User };
 
 export class ApiError extends Error {
@@ -57,4 +66,11 @@ export const api = {
   me: (token: string) => request<{ user: User }>('/me', { token }),
   updateMe: (token: string, displayName: string) =>
     request<{ user: User }>('/me', { method: 'PATCH', body: { displayName }, token }),
+  listHabits: (token: string) => request<{ habits: Habit[] }>('/habits', { token }),
+  createHabit: (token: string, input: HabitInput) =>
+    request<{ habit: Habit }>('/habits', { method: 'POST', body: input, token }),
+  updateHabit: (token: string, id: string, input: Partial<HabitInput>) =>
+    request<{ habit: Habit }>(`/habits/${id}`, { method: 'PATCH', body: input, token }),
+  deleteHabit: (token: string, id: string) =>
+    request<null>(`/habits/${id}`, { method: 'DELETE', token }),
 };
