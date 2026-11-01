@@ -1,0 +1,11 @@
+{
+  "name": "gamlify",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["mobile", "server"],
+  "scripts": {
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}
