@@ -14,6 +14,15 @@ export type Habit = {
 };
 export type HabitInput = Omit<Habit, 'id'>;
 export type Completion = { id: string; habitId: string; date: string; points: number };
+export type Character = {
+  xp: number;
+  level: number;
+  xpIntoLevel: number;
+  xpForNextLevel: number;
+  stage: number;
+  currentStreak: number;
+  longestStreak: number;
+};
 export type AuthResponse = { token: string; user: User };
 
 export class ApiError extends Error {
@@ -82,6 +91,7 @@ export const api = {
       body: { date },
       token,
     }),
+  getCharacter: (token: string) => request<{ character: Character }>('/character', { token }),
   uncompleteHabit: (token: string, habitId: string, date: string) =>
     request<null>(`/habits/${habitId}/completions/${date}`, { method: 'DELETE', token }),
 };
