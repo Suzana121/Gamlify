@@ -47,19 +47,47 @@ function makeDb() {
       async ({
         where,
       }: {
-        where: { habit: { userId: string }; completedAt: { gte: Date; lt: Date } };
+        where: { habit: { userId: string }; completedAt?: { gte: Date; lt: Date } };
       }) =>
         completions
           .filter(
             (c) =>
               habits.find((h) => h.id === c.habitId)!.userId === where.habit.userId &&
-              c.completedAt >= where.completedAt.gte &&
-              c.completedAt < where.completedAt.lt,
+              (!where.completedAt ||
+                (c.completedAt >= where.completedAt.gte && c.completedAt < where.completedAt.lt)),
           )
           .sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime()),
     ),
   };
-  return { db: { habit, completion } as unknown as Db, completions, completion };
+  const states = new Map<string, { userId: string; xp: number; level: number }>();
+  const characterState = {
+    upsert: jest.fn(
+      async ({
+        where,
+        create,
+        update,
+      }: {
+        where: { userId: string };
+        create: { userId: string; xp: number; level: number };
+        update: { xp: number; level: number };
+      }) => {
+        const row = states.has(where.userId)
+          ? Object.assign(states.get(where.userId)!, update)
+          : create;
+        states.set(where.userId, row);
+        return row;
+      },
+    ),
+    findUnique: jest.fn(
+      async ({ where }: { where: { userId: string } }) => states.get(where.userId) ?? null,
+    ),
+  };
+  return {
+    db: { habit, completion, characterState } as unknown as Db,
+    completions,
+    completion,
+    states,
+  };
 }
 
 const alice = { Authorization: `Bearer ${signToken('alice')}` };
@@ -81,7 +109,7 @@ describe('completions', () => {
     }
   });
 
-  it('creates a completion for a date at noon UTC with 10 points', async () => {
+  it('creates a completion for a date at noon UTC with 10 points (first day)', async () => {
     const { db, completions } = makeDb();
     const res = await request(createApp(db))
       .post('/habits/h1/completions')
@@ -190,5 +218,109 @@ describe('completions', () => {
     // exactly 366 days inclusive is allowed
     const ok = await request(app).get('/completions?from=2024-01-01&to=2024-12-31').set(alice);
     expect(ok.status).toBe(200);
+  });
+});
+
+describe('gamification on completions', () => {
+  const post = (app: ReturnType<typeof createApp>, date: string, id = 'h1', who = alice) =>
+    request(app).post(`/habits/${id}/completions`).set(who).send({ date });
+
+  it('awards streak bonus points and syncs XP and level', async () => {
+    const { db, states } = makeDb();
+    const app = createApp(db);
+    const points: number[] = [];
+    for (const d of ['01', '02', '03', '04', '05', '06', '07']) {
+      points.push((await post(app, `2026-03-${d}`)).body.completion.points);
+    }
+    expect(points).toEqual([10, 12, 14, 16, 18, 20, 20]);
+    expect(states.get('alice')).toMatchObject({ xp: 110, level: 2 });
+  });
+
+  it('resets the bonus after a gap and counts a backfilled day by its own streak', async () => {
+    const app = createApp(makeDb().db);
+    expect((await post(app, '2026-03-01')).body.completion.points).toBe(10);
+    expect((await post(app, '2026-03-03')).body.completion.points).toBe(10);
+    // filling the gap joins both runs: streak ending 03-02 is 2 days
+    expect((await post(app, '2026-03-02')).body.completion.points).toBe(12);
+  });
+
+  it('counts a second habit on the same day as the same streak day', async () => {
+    const app = createApp(makeDb().db);
+    await post(app, '2026-03-01');
+    expect((await post(app, '2026-03-02', 'h1')).body.completion.points).toBe(12);
+    expect((await post(app, '2026-03-02', 'h2')).body.completion.points).toBe(12);
+  });
+
+  it('does not mix streaks between users', async () => {
+    const app = createApp(makeDb().db);
+    await post(app, '2026-03-01');
+    expect((await post(app, '2026-03-02', 'hb', bob)).body.completion.points).toBe(10);
+  });
+
+  it('lowers XP when a completion is deleted and keeps it idempotent', async () => {
+    const { db, states } = makeDb();
+    const app = createApp(db);
+    await post(app, '2026-03-01');
+    await post(app, '2026-03-02');
+    expect(states.get('alice')!.xp).toBe(22);
+    await request(app).delete('/habits/h1/completions/2026-03-02').set(alice);
+    expect(states.get('alice')).toMatchObject({ xp: 10, level: 1 });
+    await request(app).delete('/habits/h1/completions/2026-03-02').set(alice);
+    expect(states.get('alice')!.xp).toBe(10);
+    await request(app).delete('/habits/h1/completions/2026-03-01').set(alice);
+    expect(states.get('alice')!.xp).toBe(0);
+  });
+});
+
+describe('GET /character', () => {
+  it('requires a token', async () => {
+    const res = await request(createApp(makeDb().db)).get('/character');
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'Unauthorized' });
+  });
+
+  it('returns the zero state without creating a row', async () => {
+    const { db, states } = makeDb();
+    const res = await request(createApp(db)).get('/character').set(alice);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      character: {
+        xp: 0,
+        level: 1,
+        xpIntoLevel: 0,
+        xpForNextLevel: 50,
+        stage: 1,
+        currentStreak: 0,
+        longestStreak: 0,
+      },
+    });
+    expect(states.size).toBe(0);
+  });
+
+  it('returns xp, level progress and streaks (with yesterday grace)', async () => {
+    const { db } = makeDb();
+    const app = createApp(db);
+    const day = (offset: number) =>
+      new Date(Date.now() - offset * 86400000).toISOString().slice(0, 10);
+    // 5-day run ending yesterday: 10+12+14+16+18 = 70 xp, plus an old isolated day
+    for (const o of [5, 4, 3, 2, 1]) {
+      await request(app)
+        .post('/habits/h1/completions')
+        .set(alice)
+        .send({ date: day(o) });
+    }
+    await request(app).post('/habits/h1/completions').set(alice).send({ date: '2020-01-01' });
+    const res = await request(app).get('/character').set(alice);
+    expect(res.body.character).toEqual({
+      xp: 80,
+      level: 2,
+      xpIntoLevel: 30,
+      xpForNextLevel: 150,
+      stage: 1,
+      currentStreak: 5,
+      longestStreak: 5,
+    });
+    const bobs = await request(app).get('/character').set(bob);
+    expect(bobs.body.character.xp).toBe(0);
   });
 });

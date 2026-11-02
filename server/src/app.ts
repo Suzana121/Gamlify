@@ -5,8 +5,9 @@ import { createAuthRouter } from './routes/auth';
 import { createMeRouter } from './routes/me';
 import { createHabitsRouter } from './routes/habits';
 import { createCompletionsRouter } from './routes/completions';
+import { createCharacterRouter } from './routes/character';
 
-export type Db = Pick<PrismaClient, 'user' | 'habit' | 'completion'>;
+export type Db = Pick<PrismaClient, 'user' | 'habit' | 'completion' | 'characterState'>;
 
 export function createApp(db: Db) {
   const app = express();
@@ -20,6 +21,7 @@ export function createApp(db: Db) {
   app.use('/auth', createAuthRouter(db));
   app.use('/me', createMeRouter(db));
   app.use(createCompletionsRouter(db));
+  app.use(createCharacterRouter(db));
   app.use('/habits', createHabitsRouter(db));
 
   // Express identifies error handlers by their 4-argument signature.

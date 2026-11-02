@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import type { Db } from '../app';
 import { requireAuth } from '../middleware/auth';
+import { pointsForStreak, streakEndingOn } from '../lib/gamification';
+import { dateOf, syncCharacter } from './character';
 
-export const POINTS_PER_COMPLETION = 10;
 const MAX_RANGE_DAYS = 366;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -57,9 +58,17 @@ export function createCompletionsRouter(db: Db) {
       res.status(409).json({ error: 'Already completed on this date' });
       return;
     }
-    const completion = await db.completion.create({
-      data: { habitId: habit.id, completedAt, points: POINTS_PER_COMPLETION },
+    const userId: string = res.locals.userId;
+    const previous = await db.completion.findMany({
+      where: { habit: { userId } },
+      select: { completedAt: true },
     });
+    const dates = [...previous.map((c) => dateOf(c.completedAt)), dateString(day)];
+    const points = pointsForStreak(streakEndingOn(dates, dateString(day)));
+    const completion = await db.completion.create({
+      data: { habitId: habit.id, completedAt, points },
+    });
+    await syncCharacter(db, userId);
     res.status(201).json({ completion: publicCompletion(completion) });
   });
 
@@ -81,6 +90,7 @@ export function createCompletionsRouter(db: Db) {
       return;
     }
     await db.completion.delete({ where: { id: existing.id } });
+    await syncCharacter(db, res.locals.userId);
     res.status(204).end();
   });
 
