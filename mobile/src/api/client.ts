@@ -13,6 +13,7 @@ export type Habit = {
   targetMinutes: number | null;
 };
 export type HabitInput = Omit<Habit, 'id'>;
+export type Completion = { id: string; habitId: string; date: string; points: number };
 export type AuthResponse = { token: string; user: User };
 
 export class ApiError extends Error {
@@ -73,4 +74,14 @@ export const api = {
     request<{ habit: Habit }>(`/habits/${id}`, { method: 'PATCH', body: input, token }),
   deleteHabit: (token: string, id: string) =>
     request<null>(`/habits/${id}`, { method: 'DELETE', token }),
+  listCompletions: (token: string, from: string, to: string) =>
+    request<{ completions: Completion[] }>(`/completions?from=${from}&to=${to}`, { token }),
+  completeHabit: (token: string, habitId: string, date: string) =>
+    request<{ completion: Completion }>(`/habits/${habitId}/completions`, {
+      method: 'POST',
+      body: { date },
+      token,
+    }),
+  uncompleteHabit: (token: string, habitId: string, date: string) =>
+    request<null>(`/habits/${habitId}/completions/${date}`, { method: 'DELETE', token }),
 };
