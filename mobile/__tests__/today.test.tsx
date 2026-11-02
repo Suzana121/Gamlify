@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import TodayScreen from '../app/(tabs)/index';
 import { toDateString } from '../src/lib/dates';
 import { useAuthStore } from '../src/store/auth';
+import { useCharacterStore } from '../src/store/character';
 import { useCompletionsStore } from '../src/store/completions';
 import { useHabitsStore } from '../src/store/habits';
 
@@ -52,6 +53,7 @@ beforeEach(() => {
   useAuthStore.setState({ token: 'tok', user: null, hydrated: true });
   useHabitsStore.getState().reset();
   useCompletionsStore.getState().reset();
+  useCharacterStore.getState().reset();
 });
 
 describe('TodayScreen', () => {
@@ -91,6 +93,41 @@ describe('TodayScreen', () => {
         { id: 'c1', habitId: 'h1', date: today, points: 10 },
       ]),
     );
+  });
+
+  it('refreshes the character after a successful toggle', async () => {
+    const character = {
+      xp: 10,
+      level: 1,
+      xpIntoLevel: 10,
+      xpForNextLevel: 100,
+      stage: 1,
+      currentStreak: 1,
+      longestStreak: 1,
+    };
+    serve({
+      'GET /habits': res(200, { habits: [read] }),
+      [listPath]: res(200, { completions: [] }),
+      'POST /habits/h1/completions': res(201, {
+        completion: { id: 'c1', habitId: 'h1', date: today, points: 10 },
+      }),
+      'GET /character': res(200, { character }),
+    });
+    await render(<TodayScreen />);
+    await fireEvent.press(await screen.findByLabelText('Read'));
+    await waitFor(() => expect(useCharacterStore.getState().character).toEqual(character));
+  });
+
+  it('does not refresh the character when the toggle fails', async () => {
+    serve({
+      'GET /habits': res(200, { habits: [read] }),
+      [listPath]: res(200, { completions: [] }),
+      'POST /habits/h1/completions': res(500, { error: 'Internal server error' }),
+    });
+    await render(<TodayScreen />);
+    await fireEvent.press(await screen.findByLabelText('Read'));
+    await screen.findByText('Internal server error');
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/character'))).toBe(false);
   });
 
   it('unchecks a completed habit with DELETE', async () => {

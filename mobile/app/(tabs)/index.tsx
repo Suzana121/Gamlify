@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { toDateString } from '../../src/lib/dates';
+import { useCharacterStore } from '../../src/store/character';
 import { useCompletionsStore } from '../../src/store/completions';
 import { useHabitsStore } from '../../src/store/habits';
 
@@ -23,6 +24,7 @@ export default function TodayScreen() {
     setActionError(null);
     try {
       await toggle(habitId, today);
+      void useCharacterStore.getState().load();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Could not update habit');
     }
