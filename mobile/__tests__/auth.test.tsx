@@ -75,17 +75,22 @@ describe('auth', () => {
 
   it('shows profile, edits display name and logs out', async () => {
     store.getItemAsync.mockResolvedValue('tok');
-    reply(200, { user });
+    const grace = { ...user, displayName: 'Grace' };
+    fetchMock.mockImplementation(async (url: string, init: { method?: string }) => {
+      const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
+      if (url.endsWith('/character')) return { ok: false, status: 500, json: async () => ({}) };
+      return ok(init.method === 'PATCH' ? { user: grace } : { user });
+    });
     await renderApp('/character');
     expect(await screen.findByText('Ada')).toBeTruthy();
     expect(screen.getByText('a@b.co')).toBeTruthy();
 
-    reply(200, { user: { ...user, displayName: 'Grace' } });
     await fireEvent.press(screen.getByText('Edit name'));
     await fireEvent.changeText(screen.getByPlaceholderText('Display name'), 'Grace');
     await fireEvent.press(screen.getByText('Save'));
     expect(await screen.findByText('Grace')).toBeTruthy();
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ displayName: 'Grace' });
+    const patch = fetchMock.mock.calls.find(([, init]) => init.method === 'PATCH');
+    expect(JSON.parse(patch?.[1].body)).toEqual({ displayName: 'Grace' });
 
     await fireEvent.press(screen.getByText('Log out'));
     await waitFor(() => expect(screen).toHavePathname('/login'));

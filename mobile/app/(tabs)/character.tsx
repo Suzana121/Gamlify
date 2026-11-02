@@ -1,15 +1,27 @@
-import { useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useAuthStore } from '../../src/store/auth';
+import { useCharacterStore } from '../../src/store/character';
+import { CharacterCard } from '../../src/ui/CharacterCard';
 
 export default function CharacterScreen() {
   const user = useAuthStore((s) => s.user);
   const updateDisplayName = useAuthStore((s) => s.updateDisplayName);
   const logout = useAuthStore((s) => s.logout);
+  const character = useCharacterStore((s) => s.character);
+  const characterError = useCharacterStore((s) => s.error);
+  const loadCharacter = useCharacterStore((s) => s.load);
   const [name, setName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadCharacter();
+    }, [loadCharacter]),
+  );
 
   const save = async () => {
     if (name === null) return;
@@ -28,7 +40,8 @@ export default function CharacterScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Character</Text>
-      <Text>Your character will appear here.</Text>
+      {character ? <CharacterCard character={character} /> : null}
+      {!character && characterError ? <Text style={styles.error}>{characterError}</Text> : null}
 
       <View style={styles.profile}>
         <Text style={styles.heading}>Profile</Text>
